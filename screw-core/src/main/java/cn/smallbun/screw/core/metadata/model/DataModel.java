@@ -20,6 +20,8 @@ package cn.smallbun.screw.core.metadata.model;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * DataModel
  * @author SanLi
@@ -48,4 +50,6 @@ public class DataModel extends DatabaseModel {
      * 描述
      */
     private String description;
+
+
 }

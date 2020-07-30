@@ -24,13 +24,17 @@ import cn.smallbun.screw.core.metadata.PrimaryKey;
 import cn.smallbun.screw.core.metadata.Table;
 import cn.smallbun.screw.core.metadata.model.ColumnModel;
 import cn.smallbun.screw.core.metadata.model.DataModel;
+import cn.smallbun.screw.core.metadata.model.IndexModel;
 import cn.smallbun.screw.core.metadata.model.TableModel;
 import cn.smallbun.screw.core.query.DatabaseQuery;
 import cn.smallbun.screw.core.query.DatabaseQueryFactory;
 import cn.smallbun.screw.core.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static cn.smallbun.screw.core.constant.DefaultConstants.*;
@@ -109,6 +113,7 @@ public class DataModelProcess extends AbstractProcess {
                 primaryKeys.stream().filter(i -> i.getTableName().equals(table.getTableName()))
                     .collect(Collectors.toList()));
         }
+
         for (Table table : tables) {
             /*封装数据开始*/
             TableModel tableModel = new TableModel();
@@ -128,11 +133,20 @@ public class DataModelProcess extends AbstractProcess {
             }
             //放入列
             tableModel.setColumns(columnModels);
+
+
+            try {
+                List<IndexModel> indexModels = buildIndexList(config.getDataSource(), table);
+                tableModel.setIndexModels(indexModels);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
         //设置表
         model.setTables(filterTables(tableModels));
         //优化数据
         optimizeData(model);
+
         /*封装数据结束*/
         logger.debug("encapsulation processing data time consuming:{}ms",
             (System.currentTimeMillis() - start));
@@ -170,5 +184,38 @@ public class DataModelProcess extends AbstractProcess {
         //放入集合
         columnModels.add(columnModel);
     }
+
+    protected List<IndexModel> buildIndexList(DataSource dataSource, Table table) throws Exception{
+
+        Connection connection = dataSource.getConnection();
+        String catalog = connection.getCatalog();
+
+        String schema = connection.getSchema();
+
+        DatabaseMetaData metaData = connection.getMetaData();
+        ResultSet indexRs = metaData.getIndexInfo(catalog, schema, table.getTableName(), false, false);
+
+        List<IndexModel> indexModelList = new ArrayList<>();
+        while(indexRs.next()){
+            IndexModel indexModel = new IndexModel();
+            indexModel.setCatalog( indexRs.getString("TABLE_CAT"));
+            indexModel.setSchema(indexRs.getString("TABLE_SCHEM"));
+            indexModel.setTableName(indexRs.getString("TABLE_NAME"));
+            indexModel.setNonUnique(indexRs.getBoolean("NON_UNIQUE"));
+            indexModel.setIndexName(indexRs.getString("INDEX_NAME"));
+            indexModel.setType(indexRs.getShort("TYPE"));
+            indexModel.setColumnName(indexRs.getString("COLUMN_NAME"));
+            String ascOrDesc = indexRs.getString("ASC_OR_DESC");
+            if(Objects.nonNull(ascOrDesc)){
+                indexModel.setAscOrDesc(ascOrDesc == "A" ?"是":"否");
+            }
+
+            indexModelList.add(indexModel);
+        }
+        connection.close();
+        return indexModelList;
+    }
+
+
 
 }
